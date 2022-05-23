@@ -3,53 +3,48 @@ package pubsub
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 
-	"github.com/go-mixins/log"
+	"github.com/go-mixins/metadata"
 	"gocloud.dev/pubsub"
 )
 
-type Handler[A any] func(ctx context.Context, msg A) error
-
-func (h Handler[A]) Connect(ctx context.Context, url string) error {
-	return h.connect(ctx, url, 1)
+func Handle[A any](ctx context.Context, url string, h HandlerFunc[A]) error {
+	return HandleConcurrent[A](ctx, url, h, 1)
 }
 
-func (h Handler[A]) ConnectConcurrent(ctx context.Context, url string, concurrency int) error {
-	return h.connect(ctx, url, concurrency)
-}
-
-func (h Handler[A]) connect(ctx context.Context, url string, concurrency int) error {
-	sub, err := pubsub.OpenSubscription(ctx, url)
+func HandleConcurrent[A any](ctx context.Context, u string, h HandlerFunc[A], concurrency int) error {
+	url, err := url.Parse(u)
 	if err != nil {
-		return fmt.Errorf("opening subscription: %+v", err)
+		return err
 	}
-	sem := make(chan struct{}, concurrency)
-	go func() {
-	recvLoop:
-		for {
-			msg, err := sub.Receive(ctx)
-			if err != nil {
-				log.Get(ctx).Errorf("receiving message: %+v", err)
-				break
-			}
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				break recvLoop
-			}
-			go func() (rErr error) {
-				defer func() { <-sem }()
-				defer msg.Ack()
-				ctx, req, err := decode[A](ctx, msg)
-				if err != nil {
-					return fmt.Errorf("decoding message: %+v", err)
-				}
-				return h(ctx, req)
-			}()
+	data := strings.SplitN(url.Scheme, "+", 2)
+	codec := defaultCodec
+	if len(data) == 0 {
+		return fmt.Errorf("URL scheme is empty string")
+	} else if len(data) == 2 {
+		if codec, err = DefaultURLMux.GetCodec(data[1]); err != nil {
+			return err
 		}
-		for n := 0; n < concurrency; n++ {
-			sem <- struct{}{}
+	}
+	handler, err := DefaultURLMux.GetHandler(data[0])
+	if err != nil {
+		return err
+	}
+	return handler(ctx, url, func(ctx context.Context, msg *pubsub.Message) error {
+		var req A
+		md := metadata.From(ctx)
+		if md == nil {
+			md = make(http.Header)
 		}
-	}()
-	return nil
+		for k, v := range msg.Metadata {
+			md[k] = strings.Split(v, "|")
+		}
+		if err := codec.Unmarshal(msg.Body, &req); err != nil {
+			return err
+		}
+		return h(metadata.With(ctx, md), req)
+	}, concurrency)
 }
