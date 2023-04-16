@@ -3,14 +3,17 @@ module github.com/go-mixins/pubsub
 go 1.20
 
 require (
+	github.com/andviro/goldie v0.0.0-20180822203610-4d8717fa0de8
 	github.com/go-mixins/log v0.2.6
 	github.com/go-mixins/metadata v0.0.4
+	github.com/nsqio/go-nsq v1.1.0
 	gocloud.dev v0.29.0
 )
 
 require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/snappy v0.0.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.7.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/net v0.6.0 // indirect

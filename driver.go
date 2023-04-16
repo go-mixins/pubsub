@@ -4,30 +4,37 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-
-	"gocloud.dev/pubsub"
 )
 
 type HandlerFunc[A any] func(ctx context.Context, msg A) error
 
-type Handler[A any] func(ctx context.Context, url *url.URL, h HandlerFunc[A], concurrency int) error
+type Handler[A any] func(ctx context.Context, url *url.URL, h HandlerFunc[A], concurrency int) (Subscription, error)
+
+type Subscription interface {
+	Shutdown(ctx context.Context) error
+}
 
 type Codec interface {
 	Marshal(src any) ([]byte, error)
 	Unmarshal(data []byte, dest any) error
 }
 
+type Message struct {
+	Metadata map[string]string
+	Body     []byte
+}
+
 type TopicOpener[A any] func(ctx context.Context, url *url.URL) (Topic[A], error)
 
 type URLMux struct {
-	handlerSchemes map[string]Handler[*pubsub.Message]
-	topicSchemes   map[string]TopicOpener[*pubsub.Message]
+	handlerSchemes map[string]Handler[Message]
+	topicSchemes   map[string]TopicOpener[Message]
 	codecSchemes   map[string]Codec
 }
 
-func (m *URLMux) RegisterHandler(scheme string, h Handler[*pubsub.Message]) {
+func (m *URLMux) RegisterHandler(scheme string, h Handler[Message]) {
 	if m.handlerSchemes == nil {
-		m.handlerSchemes = make(map[string]Handler[*pubsub.Message])
+		m.handlerSchemes = make(map[string]Handler[Message])
 	}
 	m.handlerSchemes[scheme] = h
 }
@@ -39,16 +46,16 @@ func (m *URLMux) RegisterCodec(scheme string, c Codec) {
 	m.codecSchemes[scheme] = c
 }
 
-func (m *URLMux) RegisterTopicOpener(scheme string, driver TopicOpener[*pubsub.Message]) {
+func (m *URLMux) RegisterTopicOpener(scheme string, driver TopicOpener[Message]) {
 	if m.topicSchemes == nil {
-		m.topicSchemes = make(map[string]TopicOpener[*pubsub.Message])
+		m.topicSchemes = make(map[string]TopicOpener[Message])
 	}
 	m.topicSchemes[scheme] = driver
 }
 
 var DefaultURLMux = &URLMux{}
 
-func (m *URLMux) GetHandler(scheme string) (Handler[*pubsub.Message], error) {
+func (m *URLMux) GetHandler(scheme string) (Handler[Message], error) {
 	res, ok := m.handlerSchemes[scheme]
 	if !ok {
 		return nil, fmt.Errorf("pubsub handler scheme %s not registered", scheme)
@@ -56,7 +63,7 @@ func (m *URLMux) GetHandler(scheme string) (Handler[*pubsub.Message], error) {
 	return res, nil
 }
 
-func (m *URLMux) GetTopicOpener(scheme string) (TopicOpener[*pubsub.Message], error) {
+func (m *URLMux) GetTopicOpener(scheme string) (TopicOpener[Message], error) {
 	res, ok := m.topicSchemes[scheme]
 	if !ok {
 		return nil, fmt.Errorf("pubsub topic scheme %s not registered", scheme)

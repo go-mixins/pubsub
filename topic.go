@@ -7,17 +7,28 @@ import (
 	"strings"
 
 	"github.com/go-mixins/metadata"
-	"gocloud.dev/pubsub"
 )
 
 type Topic[A any] interface {
 	Send(ctx context.Context, req A) error
+	Shutdown(ctx context.Context) error
 }
 
-type sendFunc[A any] func(ctx context.Context, req A) error
+type topic[A any] struct {
+	Topic[Message]
+	codec Codec
+}
 
-func (t sendFunc[A]) Send(ctx context.Context, req A) error {
-	return t(ctx, req)
+func (t topic[A]) Send(ctx context.Context, req A) error {
+	msg := Message{Metadata: make(map[string]string)}
+	for k, v := range metadata.From(ctx) {
+		msg.Metadata[k] = strings.Join(v, "|")
+	}
+	var err error
+	if msg.Body, err = t.codec.Marshal(req); err != nil {
+		return err
+	}
+	return t.Topic.Send(ctx, msg)
 }
 
 func OpenTopic[A any](ctx context.Context, u string) (Topic[A], error) {
@@ -30,9 +41,10 @@ func OpenTopic[A any](ctx context.Context, u string) (Topic[A], error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("URL scheme is empty string")
 	} else if len(data) == 2 {
-		if codec, err = DefaultURLMux.GetCodec(data[1]); err != nil {
+		if codec, err = DefaultURLMux.GetCodec(data[0]); err != nil {
 			return nil, err
 		}
+		data[0] = data[1]
 	}
 	opener, err := DefaultURLMux.GetTopicOpener(data[0])
 	if err != nil {
@@ -42,15 +54,5 @@ func OpenTopic[A any](ctx context.Context, u string) (Topic[A], error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening topic: %+v", err)
 	}
-	return sendFunc[A](func(ctx context.Context, req A) error {
-		msg := &pubsub.Message{Metadata: make(map[string]string)}
-		for k, v := range metadata.From(ctx) {
-			msg.Metadata[k] = strings.Join(v, "|")
-		}
-		var err error
-		if msg.Body, err = codec.Marshal(req); err != nil {
-			return err
-		}
-		return t.Send(ctx, msg)
-	}), nil
+	return topic[A]{Topic: t, codec: codec}, nil
 }

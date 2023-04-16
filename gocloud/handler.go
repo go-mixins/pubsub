@@ -10,10 +10,10 @@ import (
 	p "gocloud.dev/pubsub"
 )
 
-func HandleConcurrent(ctx context.Context, url *url.URL, h pubsub.HandlerFunc[*p.Message], concurrency int) error {
+func HandleConcurrent(ctx context.Context, url *url.URL, h pubsub.HandlerFunc[pubsub.Message], concurrency int) (pubsub.Subscription, error) {
 	sub, err := p.DefaultURLMux().OpenSubscriptionURL(ctx, url)
 	if err != nil {
-		return fmt.Errorf("opening subscription: %+v", err)
+		return nil, fmt.Errorf("opening subscription: %+v", err)
 	}
 	sem := make(chan struct{}, concurrency)
 	go func() {
@@ -32,14 +32,14 @@ func HandleConcurrent(ctx context.Context, url *url.URL, h pubsub.HandlerFunc[*p
 			go func() (rErr error) {
 				defer func() { <-sem }()
 				defer msg.Ack()
-				return h(ctx, msg)
+				return h(ctx, pubsub.Message{Body: msg.Body, Metadata: msg.Metadata})
 			}()
 		}
 		for n := 0; n < concurrency; n++ {
 			sem <- struct{}{}
 		}
 	}()
-	return nil
+	return sub, nil
 }
 
 func init() {
