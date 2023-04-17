@@ -53,5 +53,5 @@ func (t topic) Send(ctx context.Context, msg pubsub.Message) error {
 }
 
 func init() {
-	pubsub.DefaultURLMux.RegisterTopicOpener("gocloud", OpenTopic)
+	pubsub.DefaultURLMux.RegisterTopicOpener("nsq", OpenTopic)
 }
