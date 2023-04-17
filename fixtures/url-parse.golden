@@ -1,0 +1,2 @@
+nsq+json://10.0.0.1:4151,10.0.0.2:4151/topic: nsq json nsq <nil>
+gocloud+json+nats://10.0.0.1:4151,10.0.0.2:4151/topic#channel: gocloud json nats <nil>

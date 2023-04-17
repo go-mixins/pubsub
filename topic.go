@@ -36,17 +36,17 @@ func OpenTopic[A any](ctx context.Context, u string) (Topic[A], error) {
 	if err != nil {
 		return nil, err
 	}
-	data := strings.SplitN(url.Scheme, "+", 2)
+	scheme, codecScheme, err := parseScheme(url)
+	if err != nil {
+		return nil, err
+	}
 	codec := defaultCodec
-	if len(data) == 0 {
-		return nil, fmt.Errorf("URL scheme is empty string")
-	} else if len(data) == 2 {
-		if codec, err = DefaultURLMux.GetCodec(data[0]); err != nil {
+	if codecScheme != "" {
+		if codec, err = DefaultURLMux.GetCodec(codecScheme); err != nil {
 			return nil, err
 		}
-		data[0] = data[1]
 	}
-	opener, err := DefaultURLMux.GetTopicOpener(data[0])
+	opener, err := DefaultURLMux.GetTopicOpener(scheme)
 	if err != nil {
 		return nil, err
 	}

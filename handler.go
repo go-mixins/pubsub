@@ -2,7 +2,6 @@ package pubsub
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -19,16 +18,17 @@ func HandleConcurrent[A any](ctx context.Context, u string, h HandlerFunc[A], co
 	if err != nil {
 		return nil, err
 	}
-	data := strings.SplitN(url.Scheme, "+", 2)
+	scheme, codecScheme, err := parseScheme(url)
+	if err != nil {
+		return nil, err
+	}
 	codec := defaultCodec
-	if len(data) == 0 {
-		return nil, fmt.Errorf("URL scheme is empty string")
-	} else if len(data) == 2 {
-		if codec, err = DefaultURLMux.GetCodec(data[1]); err != nil {
+	if codecScheme != "" {
+		if codec, err = DefaultURLMux.GetCodec(codecScheme); err != nil {
 			return nil, err
 		}
 	}
-	handler, err := DefaultURLMux.GetHandler(data[0])
+	handler, err := DefaultURLMux.GetHandler(scheme)
 	if err != nil {
 		return nil, err
 	}
