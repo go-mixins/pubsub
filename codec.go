@@ -1,6 +1,8 @@
 package pubsub
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 type JSONCodec struct{}
 
@@ -12,4 +14,8 @@ func (c JSONCodec) Marshal(src any) ([]byte, error) {
 
 func (c JSONCodec) Unmarshal(data []byte, dest any) error {
 	return json.Unmarshal(data, dest)
+}
+
+func init() {
+	DefaultURLMux.RegisterCodec("json", defaultCodec)
 }
