@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,19 +21,19 @@ func HandleConcurrent[A any](ctx context.Context, u string, h HandlerFunc[A], co
 	}
 	scheme, codecScheme, err := parseScheme(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing scheme for %q: %+v", url, err)
 	}
 	codec := defaultCodec
 	if codecScheme != "" {
 		if codec, err = DefaultURLMux.GetCodec(codecScheme); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("getting codec %s: %+v", codecScheme, err)
 		}
 	}
 	handler, err := DefaultURLMux.GetHandler(scheme)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting handler fo %s: %+v", scheme, err)
 	}
-	return handler(ctx, url, func(ctx context.Context, msg Message) error {
+	res, err := handler(ctx, url, func(ctx context.Context, msg Message) error {
 		var req A
 		md := metadata.From(ctx)
 		if md == nil {
@@ -46,4 +47,8 @@ func HandleConcurrent[A any](ctx context.Context, u string, h HandlerFunc[A], co
 		}
 		return h(metadata.With(ctx, md), req)
 	}, concurrency)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating handler for %q: %+v", url, err)
+	}
+	return res, nil
 }
